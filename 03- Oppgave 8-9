@@ -1,3 +1,5 @@
+#------------------------
+#------meny valg8-9------
 def finn_planer_som_bruker_emne():
     if not studieplaner:
         print("Ingen studieplaner ennå.")
