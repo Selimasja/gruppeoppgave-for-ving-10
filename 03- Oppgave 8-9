@@ -1,1 +1,59 @@
+def finn_planer_som_bruker_emne():
+    if not studieplaner:
+        print("Ingen studieplaner ennå.")
+        return
+    kode = input("Emnekode: ").strip().upper()
+    if not kode:
+        print("Avbrutt: mangler emnekode.")
+        return
+
+    funn = []
+    for p in studieplaner:
+        for sem in p.emner_per_semester:
+            if any(e.emnekode.upper() == kode for e in sem):
+                funn.append(p)
+                break
+
+    if not funn:
+        print(f"Ingen studieplaner bruker {kode}.")
+    else:
+        print(f"Studieplaner som bruker {kode}:")
+        for p in funn:
+            print(f"  - {p.tittel} (ID: {p.plan_id})")
+
+
+def lagre_til_fil():
+    filnavn = input("Filnavn (data.txt): ").strip() or "data.txt"
+    try:
+        with open(filnavn, "w", encoding="utf-8") as f:
+            # Emner
+            f.write("=== EMNER ===\n")
+            for e in alle_emner:
+                sesong = "høst" if e.semester == "H" else "vår"
+                f.write(f"{e.emnekode};{e.navn};{sesong};{e.studiepoeng}\n")
+
+            # Studieplaner
+            f.write("\n=== STUDIEPLANER ===\n")
+            for p in studieplaner:
+                f.write(f"Studieplan: {p.plan_id} - {p.tittel}\n")
+                for i, sem in enumerate(p.emner_per_semester, start=1):
+                    f.write(f"Semester {i}: ")
+                    if sem:
+                        f.write(", ".join(e.emnekode for e in sem))
+                    else:
+                        f.write("(ingen emner)")
+                    f.write("\n")
+                f.write("\n")
+        print(f"Lagret data til filen '{filnavn}'.")
+    except Exception as e:
+        print("Klarte ikke å lagre filen:", e)
+
+
+
+if __name__ == "__main__":
+    meny()
+
+
+    
+    
 
