@@ -1,0 +1,287 @@
+# file: studieplan_del2_simplere.py
+from __future__ import annotations
+from dataclasses import dataclass, asdict, field
+from typing import List, Optional, Tuple, Dict, Any
+import json
+
+HOST_SEM = {1, 3, 5}
+VAR_SEM  = {2, 4, 6}
+MAKS_STP = 30
+
+# ------------------ Modeller ------------------
+
+@dataclass
+class Emne:
+    emnekode: str
+    navn: str
+    semester: str   # 'H' eller 'V'
+    studiepoeng: int
+
+    def __post_init__(self) -> None:
+        self.emnekode = self.emnekode.strip().upper()
+        s = (self.semester or "").strip().upper()
+        if not self.emnekode or " " in self.emnekode:
+            raise ValueError("Ugyldig emnekode.")
+        if s not in {"H", "V"}:
+            raise ValueError("Semester må være H/V.")
+        if int(self.studiepoeng) <= 0:
+            raise ValueError("Studiepoeng må være > 0.")
+        self.semester = s
+        self.studiepoeng = int(self.studiepoeng)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(d: Dict[str, Any]) -> "Emne":
+        return Emne(d["emnekode"], d["navn"], d["semester"], int(d["studiepoeng"]))
+
+@dataclass
+class Studieplan:
+    plan_id: str
+    tittel: str
+    emner_per_semester: List[List[Emne]] = field(default_factory=lambda: [[] for _ in range(6)])
+
+    def stp(self, sem_idx: int) -> int:
+        return sum(e.studiepoeng for e in self.emner_per_semester[sem_idx])
+
+    def legg_til(self, emne: Emne, sem_nr: int) -> None:
+        if not (1 <= sem_nr <= 6):
+            raise ValueError("Semester må være 1–6.")
+        if emne.semester == "H" and sem_nr not in HOST_SEM:
+            raise ValueError("Høst-emne kan ikke legges i vår-semester.")
+        if emne.semester == "V" and sem_nr not in VAR_SEM:
+            raise ValueError("Vår-emne kan ikke legges i høst-semester.")
+        sem = self.emner_per_semester[sem_nr - 1]
+        if any(e.emnekode == emne.emnekode for e in sem):
+            raise ValueError("Emnet finnes allerede i dette semesteret.")
+        if self.stp(sem_nr - 1) + emne.studiepoeng > MAKS_STP:
+            raise ValueError("30-stp grensen overskrides.")
+        sem.append(emne)
+
+    def fjern(self, emnekode: str, sem_nr: int) -> bool:
+        if not (1 <= sem_nr <= 6):
+            raise ValueError("Semester må være 1–6.")
+        sem = self.emner_per_semester[sem_nr - 1]
+        før = len(sem)
+        k = emnekode.strip().upper()
+        self.emner_per_semester[sem_nr - 1] = [e for e in sem if e.emnekode != k]
+        return len(self.emner_per_semester[sem_nr - 1]) < før
+
+    def skriv_ut(self) -> None:
+        print(f"\nStudieplan: {self.tittel} (ID: {self.plan_id})")
+        for i in range(6):
+            print(f"\nSemester {i+1} (sum {self.stp(i)} stp):")
+            if not self.emner_per_semester[i]:
+                print("  - ingen emner")
+            else:
+                for e in self.emner_per_semester[i]:
+                    ses = "høst" if e.semester == "H" else "vår"
+                    print(f"  - {e.emnekode} — {e.navn} ({ses}, {e.studiepoeng} stp)")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "tittel": self.tittel,
+            "emner_per_semester": [[e.to_dict() for e in sem] for sem in self.emner_per_semester],
+        }
+
+    @staticmethod
+    def from_dict(d: Dict[str, Any]) -> "Studieplan":
+        p = Studieplan(d["plan_id"], d["tittel"])
+        eps: List[List[Emne]] = []
+        for sem in d.get("emner_per_semester", []):
+            eps.append([Emne.from_dict(ed) for ed in sem])
+        while len(eps) < 6:
+            eps.append([])
+        p.emner_per_semester = eps[:6]
+        return p
+
+# ------------------ Tilstand & persistens ------------------
+
+ALLE_EMNER: List[Emne] = []
+STUDIEPLANER: List[Studieplan] = []
+
+def lagre(path: str) -> None:
+    data = {"emner": [e.to_dict() for e in ALLE_EMNER],
+            "studieplaner": [p.to_dict() for p in STUDIEPLANER]}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def les(path: str) -> None:
+    global ALLE_EMNER, STUDIEPLANER
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    ALLE_EMNER = [Emne.from_dict(d) for d in data.get("emner", [])]
+    STUDIEPLANER = [Studieplan.from_dict(d) for d in data.get("studieplaner", [])]
+
+# ------------------ Små hjelpere ------------------
+
+def inntall(prompt: str, lo: int, hi: int) -> Optional[int]:
+    s = input(prompt).strip()
+    if not s.isdigit():
+        print("Ugyldig tall."); return None
+    v = int(s)
+    if not (lo <= v <= hi):
+        print(f"Utenfor [{lo}-{hi}]."); return None
+    return v
+
+def velg_plan() -> Optional[Studieplan]:
+    if not STUDIEPLANER:
+        print("Ingen studieplaner."); return None
+    for p in STUDIEPLANER: print(f"- {p.plan_id}: {p.tittel}")
+    pid = input("Plan-ID: ").strip()
+    for p in STUDIEPLANER:
+        if p.plan_id == pid:
+            return p
+    print("Fant ikke studieplan."); return None
+
+def velg_emne() -> Optional[Emne]:
+    if not ALLE_EMNER:
+        print("Ingen emner."); return None
+    for e in sorted(ALLE_EMNER, key=lambda x: x.emnekode):
+        ses = "H" if e.semester == "H" else "V"
+        print(f"- {e.emnekode} ({ses}, {e.studiepoeng} stp) {e.navn}")
+    kode = input("Emnekode: ").strip().upper()
+    for e in ALLE_EMNER:
+        if e.emnekode == kode:
+            return e
+    print("Fant ikke emnet."); return None
+
+def gyldighet(plan: Studieplan) -> Tuple[bool, List[str]]:
+    feil: List[str] = []
+    for i in range(6):
+        semnr = i + 1
+        stp = plan.stp(i)
+        if stp > MAKS_STP: feil.append(f"Semester {semnr}: {stp} stp (over {MAKS_STP}).")
+        forventet = "H" if semnr in HOST_SEM else "V"
+        for e in plan.emner_per_semester[i]:
+            if e.semester != forventet:
+                feil.append(f"Semester {semnr} er {'høst' if forventet=='H' else 'vår'}, "
+                            f"men {e.emnekode} er {'høst' if e.semester=='H' else 'vår'}.")
+    return (len(feil) == 0), feil
+
+# ------------------ Menyvalg ------------------
+
+def v1_lag_emne() -> None:
+    kode = input("Emnekode: ").strip().upper()
+    if not kode: print("Mangler emnekode."); return
+    if any(e.emnekode == kode for e in ALLE_EMNER): print("Emnekode finnes."); return
+    navn = input("Emnenavn: ").strip() or f"Emne {kode}"
+    sem = input("Semester (H/V): ").strip().upper()
+    stp = input("Studiepoeng: ").strip()
+    if not stp.isdigit(): print("Studiepoeng må være heltall."); return
+    try:
+        ALLE_EMNER.append(Emne(kode, navn, sem, int(stp)))
+        print(f"Laget emne {kode}.")
+    except Exception as e:
+        print("Ugyldig emne:", e)
+
+def v2_legg_til_emne() -> None:
+    plan = velg_plan()
+    if not plan: return
+    emne = velg_emne()
+    if not emne: return
+    sem = inntall("Semester (1–6): ", 1, 6)
+    if sem is None: return
+    try:
+        plan.legg_til(emne, sem)
+        print(f"La til {emne.emnekode} i semester {sem}.")
+    except ValueError as e:
+        print(e)
+
+def v3_fjern_emne() -> None:
+    plan = velg_plan()
+    if not plan: return
+    sem = inntall("Fra hvilket semester (1–6)?: ", 1, 6)
+    if sem is None: return
+    kode = input("Emnekode: ").strip().upper()
+    if plan.fjern(kode, sem): print("Fjernet emnet.")
+    else: print("Fant ikke emnet i det semesteret.")
+
+def v4_skriv_emner() -> None:
+    if not ALLE_EMNER: print("Ingen emner registrert."); return
+    print("\nAlle registrerte emner:")
+    for e in sorted(ALLE_EMNER, key=lambda x: x.emnekode):
+        ses = "høst" if e.semester == "H" else "vår"
+        print(f" - {e.emnekode} — {e.navn} ({ses}, {e.studiepoeng} stp)")
+
+def v5_ny_plan() -> None:
+    pid = input("Studieplan ID: ").strip()
+    if not pid: print("Mangler ID."); return
+    if any(p.plan_id == pid for p in STUDIEPLANER): print("ID i bruk."); return
+    tittel = input("Tittel: ").strip() or pid
+    STUDIEPLANER.append(Studieplan(pid, tittel))
+    print(f"Studieplan '{tittel}' opprettet.")
+
+def v6_skriv_plan() -> None:
+    plan = velg_plan()
+    if plan: plan.skriv_ut()
+
+def v7_sjekk() -> None:
+    plan = velg_plan()
+    if not plan: return
+    ok, feil = gyldighet(plan)
+    if ok: print("Studieplanen er gyldig.")
+    else:
+        print("Studieplanen er ikke gyldig:")
+        for f in feil: print("  -", f)
+
+def v8_finn_planer_for_emne() -> None:
+    if not STUDIEPLANER: print("Ingen studieplaner."); return
+    kode = input("Emnekode: ").strip().upper()
+    funn = []
+    for p in STUDIEPLANER:
+        if any(any(e.emnekode == kode for e in sem) for sem in p.emner_per_semester):
+            funn.append(p)
+    if not funn: print(f"Ingen studieplaner bruker {kode}.")
+    else:
+        print(f"Studieplaner som bruker {kode}:")
+        for p in funn: print(f"  - {p.tittel} (ID: {p.plan_id})")
+
+def v9_lagre() -> None:
+    fil = input("Filnavn (data.json): ").strip() or "data.json"
+    try:
+        lagre(fil); print(f"Lagret til '{fil}'.")
+    except Exception as e:
+        print("Kunne ikke lagre:", e)
+
+def v10_les() -> None:
+    fil = input("Filnavn (data.json): ").strip() or "data.json"
+    try:
+        les(fil); print(f"Lest {len(ALLE_EMNER)} emner og {len(STUDIEPLANER)} studieplan(er).")
+    except Exception as e:
+        print("Kunne ikke lese:", e)
+
+def meny() -> None:
+    while True:
+        print("\nMeny:")
+        print(" 1: Lag et nytt emne")
+        print(" 2: Legg til et emne i en studieplan")
+        print(" 3: Fjern et emne fra en studieplan")
+        print(" 4: Skriv ut alle registrerte emner")
+        print(" 5: Lag en ny tom studieplan")
+        print(" 6: Skriv ut en studieplan")
+        print(" 7: Sjekk om en studieplan er gyldig")
+        print(" 8: Finn hvilke studieplaner som bruker et emne")
+        print(" 9: Lagre emnene og studieplanene til fil")
+        print("10: Les inn emnene og studieplanene fra fil")
+        print("11: Avslutt")
+        valg = input("Valg: ").strip()
+        if valg == "1": v1_lag_emne()
+        elif valg == "2": v2_legg_til_emne()
+        elif valg == "3": v3_fjern_emne()
+        elif valg == "4": v4_skriv_emner()
+        elif valg == "5": v5_ny_plan()
+        elif valg == "6": v6_skriv_plan()
+        elif valg == "7": v7_sjekk()
+        elif valg == "8": v8_finn_planer_for_emne()
+        elif valg == "9": v9_lagre()
+        elif valg == "10": v10_les()
+        elif valg == "11":
+            print("Avslutter..."); break
+        else:
+            print("Ugyldig valg.")
+
+if __name__ == "__main__":
+    meny()
