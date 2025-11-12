@@ -187,7 +187,42 @@ def finn_planer_som_bruker_emne():
         print(f"Studieplaner som bruker {kode}:")
         for p in funn:
             print(f"  - {p.tittel} (ID: {p.plan_id})")
+oppgave 7) studieplan er gyldig eller ikke?
 
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class UkePlan:
+    uke: int
+    tema: str
+    mål: str
+
+@dataclass
+class Emne:
+    navn: str
+    beskrivelse: str
+    uker: List[UkePlan]
+
+def sjekk_studieplan(emner: List[Emne]) -> bool:
+    if not emner:
+        print("❌ Studieplanen har ingen emner.")
+        return False
+    
+    for e in emner:
+        if not e.navn or not e.beskrivelse:
+            print(f"❌ Emnet mangler navn eller beskrivelse: {e}")
+            return False
+        if not e.uker:
+            print(f"❌ Emnet '{e.navn}' mangler ukeplan.")
+            return False
+        for u in e.uker:
+            if not u.tema or not u.mål:
+                print(f"❌ Uke {u.uke} i emnet '{e.navn}' mangler tema eller mål.")
+                return False
+    
+    print("✅ Studieplanen er gyldig!")
+    return True.
 
 def lagre_til_fil():
     filnavn = input("Filnavn (data.txt): ").strip() or "data.txt"
