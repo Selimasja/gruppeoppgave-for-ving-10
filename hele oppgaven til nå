@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Nov 11 18:12:02 2025
+
+@author: selimasjaripova
+"""
+
+# ---------------------------
+# OPPGAVE 1: Registrer emner 
+# ---------------------------
+
+from dataclasses import dataclass
+
+@dataclass
+class Emne:
+    emnekode: str
+    navn: str
+    semester: str  # 'H' for høst, 'V' for vår
+    studiepoeng: int
+
+    def __post_init__(self):
+        s = self.semester.upper()
+        if s not in {'H', 'V'}:
+            raise ValueError("semester må være 'H' (høst) eller 'V' (vår)")
+        self.semester = s
+
+# mappe til Emne-objekter
+emnekoder = [
+    "BDS100", "BRH101", "ORG110",  # 1. Høst
+    "BDS210", "BRH100", "BRH220",  # 2. Vår
+    "BDS110", "BRH210", "BDS220",  # 3. Høst
+    "BRH110", "BRH230", "DAT210",  # 4. Vår
+    "BDS300", "BRH312", "BRL370",  # 5. Høst
+    "BDS320", "MAT200", "ING200"   # 6. Vår
+]
+semestre_str = [
+    "høst", "høst", "høst",
+    "vår", "vår", "vår",
+    "høst", "høst", "høst",
+    "vår", "vår", "vår",
+    "høst", "høst", "høst",
+    "vår", "vår", "vår"
+]
+studiepoeng_liste = [10] * len(emnekoder)
+
+# Lag en enkel "navn" for hvert emne 
+def default_navn(kode: str) -> str:
+    return f"Emne {kode}"
+
+alle_emner: list[Emne] = []
+for kode, sem_str, stp in zip(emnekoder, semestre_str, studiepoeng_liste):
+    hv = 'H' if sem_str.lower() == 'høst' else 'V'
+    alle_emner.append(Emne(kode, default_navn(kode), hv, stp))
+
+# ---------------------------
+# OPPGAVE 2: Lag studieplan 
+# ---------------------------
+
+# 6 semestre
+studieplan: list[list[int]] = [[] for _ in range(6)]
+høst_semestre = {1, 3, 5}
+vår_semestre  = {2, 4, 6}
+MAKS_STP_PER_SEM = 30
+
+for i, emne in enumerate(alle_emner):
+    # semesternummer ut fra posisjon i lista (hver 3. emne bytter semester)
+    sem_nr = i // 3 + 1  # 1..6
+
+    # Sjekk at H/V matcher semestertype
+    if emne.semester == 'H' and sem_nr not in høst_semestre:
+        continue
+    if emne.semester == 'V' and sem_nr not in vår_semestre:
+        continue
+
+    sem_idx = sem_nr - 1
+    opptatte = sum(alle_emner[j].studiepoeng for j in studieplan[sem_idx])
+    if opptatte + emne.studiepoeng <= MAKS_STP_PER_SEM:
+        studieplan[sem_idx].append(i)
+
+# ------------------------------
+# OPPGAVE 3: Skriv ut alle registrerte emner (fra Emne-objekter)
+# ------------------------------
+
+print("Alle registrerte emner:")
+for nr, e in enumerate(alle_emner, start=1):
+    sesong = "høst" if e.semester == 'H' else "vår"
+    print(f"{nr}. {e.emnekode} — {e.navn} ({sesong}) - {e.studiepoeng} studiepoeng")
+
+#-------------------------------------
+#oppgave 4-6
+#--------------------------------------
+
+from dataclasses import dataclass, field
+from typing import List
+
+# ---------------------------
+# Studieplan (ID, tittel og 6 tomme semestre)
+# ---------------------------
+@dataclass
+class Studieplan:
+    plan_id: str
+    tittel: str
+    emner_per_semester: List[List[Emne]] = field(default_factory=lambda: [[] for _ in range(6)])
+
+    def skriv_ut(self):
+        print(f"Studieplan: {self.tittel} (ID: {self.plan_id})")
+        for i in range(6):
+            print(f"\nSemester {i+1}:")
+            if not self.emner_per_semester[i]:
+                print("  - ingen emner")
+            else:
+                for e in self.emner_per_semester[i]:
+                    print(f"  - {e.emnekode} — {e.navn} ({e.studiepoeng} stp)")
+
+
+# Liste for studieplaner
+studieplaner: List[Studieplan] = []
+
+# ---------------------------
+# Menyvalg 4–6 
+# ---------------------------
+def skriv_ut_alle_emner():
+    print("Alle registrerte emner:")
+    for i, e in enumerate(alle_emner, start=1):
+        sesong = "høst" if e.semester == 'H' else "vår"
+        print(f"{i}. {e.emnekode} — {e.navn} ({sesong}) - {e.studiepoeng} stp")
+
+def lag_tom_studieplan():
+    pid = input("Studieplan-ID: ").strip()
+    if not pid:
+        print("Avbrutt: mangler ID.")
+        return
+    tittel = input("Tittel: ").strip() or pid
+    studieplaner.append(Studieplan(pid, tittel))
+    print(f"Studieplan '{tittel}' opprettet.")
+
+def skriv_ut_studieplan():
+    if not studieplaner:
+        print("Ingen studieplaner ennå. Lag en med valg 5.")
+        return
+    print("Tilgjengelige planer:")
+    for p in studieplaner:
+        print(f"- {p.plan_id}: {p.tittel}")
+    pid = input("Hvilken ID?: ").strip()
+    for p in studieplaner:
+        if p.plan_id == pid:
+            p.skriv_ut()
+            return
+    print("Fant ikke studieplan.")
+    
+def legg_emne_i_studieplan():
+    # Skriver ut listen med emner
+    # Spør bruker hvilket emne han vil legge i studieplan
+    # Spør bruker hvilken studieplan vil du legge "emne" i?
+    # Legger til emne i valgt studieplan
+    print("\nHvilket emne vil du legge til?")
+    for i, e in enumerate(alle_emner, start=1):
+        sesong = "høst" if e.semester == 'H' else "vår"
+        print(f"{i}. {e.emnekode} — {e.navn} ({sesong}) - {e.studiepoeng} stp")
+
+    # 2. Bruker velger emnenummer
+    try:
+        valg = int(input("Skriv nummeret på emnet: "))
+        emne = alle_emner[valg - 1]
+    except (ValueError, IndexError):
+        print("Ugyldig valg.")
+        return
+
+    # 3. Velg studieplan
+    if not studieplaner:
+        print("Ingen studieplaner finnes. Lag en med menyvalg 5.")
+        return
+
+    print("\nTilgjengelige studieplaner:")
+    for p in studieplaner:
+        print(f"- {p.plan_id}: {p.tittel}")
+
+    pid = input("Skriv ID for studieplanen du vil bruke: ").strip()
+
+    # Finn studieplanen
+    valgt_plan = None
+    for p in studieplaner:
+        if p.plan_id == pid:
+            valgt_plan = p
+            break
+
+    if not valgt_plan:
+        print("Fant ikke studieplan.")
+        return
+
+    # 4. Velg semester
+    try:
+        sem = int(input("Hvilket semester (1-6) vil du legge emnet i?: "))
+        if not (1 <= sem <= 6):
+            raise ValueError
+    except ValueError:
+        print("Ugyldig semesternummer.")
+        return
+
+    # 5. Legg inn emnet
+    valgt_plan.emner_per_semester[sem - 1].append(emne)
+    print(f"✔ La til {emne.emnekode} i semester {sem} i studieplan '{valgt_plan.tittel}'.")
+
+def v10_les() -> None:
+    fil = input("Filnavn (data.txt): ").strip() or "data.txt"
+    try:
+        les(fil); print(f"Lest {len(ALLE_EMNER)} emner og {len(STUDIEPLANER)} studieplan(er).")
+    except Exception as e:
+        print("Kunne ikke lese:", e)
+    
+
+def meny():
+    while True:
+        print("\n4: skriv ut emner")
+        print("5: lag tom studieplan")
+        print("6: skriv ut studieplan")
+        print("8: finn planer som bruker et emne")
+        print("9: lagre emner og studieplaner til fil")
+        print('10: Hvilket emner vil du legge i studieplan?')
+        print('11: Les studieplan og emne fra fil')
+        print('12: Sjekk studieplan')
+        print("0: avslutt")
+        valg = input("Valg: ").strip()
+
+        if valg == "4":
+            skriv_ut_alle_emner()
+        elif valg == "5":
+            lag_tom_studieplan()
+        elif valg == "6":
+            skriv_ut_studieplan()
+        elif valg == "8":
+             finn_planer_som_bruker_emne()
+        elif valg == "9":
+            lagre_til_fil()
+        elif valg=='10':
+            legg_emne_i_studieplan()
+        elif valg=='11':
+            v10_les()
+        elif valg=='12':
+            sjekk_studieplan()
+        elif valg in ("11", "0"):   # <- oppgave 11 
+            break
+        else:
+            print("Ugyldig valg")
+            
+
+    
+    
+            
+            
+#--------------------------------------------            
+#oppgave 7) studieplan er gyldig eller ikke?
+#--------------------------------------------
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class UkePlan:
+    uke: int
+    tema: str
+    mål: str
+
+@dataclass
+class Emne:
+    navn: str
+    beskrivelse: str
+    uker: List[UkePlan]
+
+def sjekk_studieplan(emner: List[Emne]) -> bool:
+    if not emner:
+        print(" Studieplanen har ingen emner.")
+        return False
+    
+    for e in emner:
+        if not e.navn or not e.beskrivelse:
+            print(f" Emnet mangler navn eller beskrivelse: {e}")
+            return False
+        if not e.uker:
+            print(f" Emnet '{e.navn}' mangler ukeplan.")
+            return False
+        for u in e.uker:
+            if not u.tema or not u.mål:
+                print(f" Uke {u.uke} i emnet '{e.navn}' mangler tema eller mål.")
+                return False
+    
+    print(" Studieplanen er gyldig!")
+    return True
+ 
+            
+            
+#-------------------------
+# ---menyvalg 8-9--------
+#--------------------------
+
+def finn_planer_som_bruker_emne():
+    if not studieplaner:
+        print("Ingen studieplaner ennå.")
+        return
+    kode = input("Emnekode: ").strip().upper()
+    if not kode:
+        print("Avbrutt: mangler emnekode.")
+        return
+
+    funn = []
+    for p in studieplaner:
+        for sem in p.emner_per_semester:
+            if any(e.emnekode.upper() == kode for e in sem):
+                funn.append(p)
+                break
+
+    if not funn:
+        print(f"Ingen studieplaner bruker {kode}.")
+    else:
+        print(f"Studieplaner som bruker {kode}:")
+        for p in funn:
+            print(f"  - {p.tittel} (ID: {p.plan_id})")
+
+
+def lagre_til_fil():
+    filnavn = input("Filnavn (data.txt): ").strip() or "data.txt"
+    try:
+        with open(filnavn, "w", encoding="utf-8") as f:
+            # Emner
+            f.write("=== EMNER ===\n")
+            for e in alle_emner:
+                sesong = "høst" if e.semester == "H" else "vår"
+                f.write(f"{e.emnekode};{e.navn};{sesong};{e.studiepoeng}\n")
+
+            # Studieplaner
+            f.write("\n=== STUDIEPLANER ===\n")
+            for p in studieplaner:
+                f.write(f"Studieplan: {p.plan_id} - {p.tittel}\n")
+                for i, sem in enumerate(p.emner_per_semester, start=1):
+                    f.write(f"Semester {i}: ")
+                    if sem:
+                        f.write(", ".join(e.emnekode for e in sem))
+                    else:
+                        f.write("(ingen emner)")
+                    f.write("\n")
+                f.write("\n")
+        print(f"Lagret data til filen '{filnavn}'.")
+    except Exception as e:
+        print("Klarte ikke å lagre filen:", e)
+
+
+
+if __name__ == "__main__":
+    meny()
+
+#---------------------------------------------------
+#oppgave 10)les  emnene og studieplanene fra fil ?
+#---------------------------------------------------
+
+import json
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class UkePlanJSON:
+    uke: int
+    tema: str
+    mål: str
+
+@dataclass
+class EmneJSON:
+    navn: str
+    beskrivelse: str
+    uker: List[UkePlan]
+
+def last_studieplan(filnavn: str) -> List[EmneJSON]:
+    """Les inn studieplan fra JSON-fil"""
+    with open(filnavn, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    emner = []
+    for e in data:
+        uker = [UkePlan(**u) for u in e.get("uker", [])]
+        emner.append(Emne(navn=e["navn"], beskrivelse=e.get("beskrivelse", ""), uker=uker))
+    return emner
+
+def sjekk_studieplan_JSON(emner: List[EmneJSON]) -> bool:
+    """Valider studieplanen"""
+    if not emner:
+        print(" Studieplanen har ingen emner.")
+        return False
+    
+    for e in emner:
+        if not e.navn or not e.beskrivelse:
+            print(f" Emnet mangler navn eller beskrivelse: {e}")
+            return False
+        if not e.uker:
+            print(f" Emnet '{e.navn}' mangler ukeplan.")
+            return False
+        for u in e.uker:
+            if not u.tema or not u.mål:
+                print(f" Uke {u.uke} i emnet '{e.navn}' mangler tema eller mål.")
+                return False
+    
+    print(" Studieplanen er gyldig!")
+    return True
+
